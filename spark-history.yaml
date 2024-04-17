@@ -1,0 +1,62 @@
+
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: spark-history-server
+  namespace: spark-ns
+
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spark-history-server
+
+  template:
+    metadata:
+      name: spark-history-server
+      labels:
+        app: spark-history-server
+
+    spec:
+      containers:
+        - name: spark-history-server
+          image: "akaliutau/spark-gcp:v3.1.3"
+
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "100m"
+
+          command:
+            - "/bin/sh"
+            - "-c"
+            - |
+              export SPARK_HISTORY_OPTS="-Dspark.hadoop.google.cloud.auth.service.account.json.keyfile=/etc/secrets/sparkonk8s.json";
+              /opt/spark/bin/spark-class -Dspark.history.fs.logDirectory=gs://spark-history-server-logs-test org.apache.spark.deploy.history.HistoryServer
+          ports:
+            - name: hs-port
+              protocol: TCP
+              containerPort: 18080
+
+          readinessProbe:
+            timeoutSeconds: 30
+            httpGet:
+              path: /
+              port: hs-port
+
+          livenessProbe:
+            timeoutSeconds: 30
+            httpGet:
+              path: /
+              port: hs-port
+
+          volumeMounts:
+            - name: secret-volume
+              readOnly: true
+              mountPath: "/etc/secrets"
+      serviceAccount: default
+      volumes:
+        - name: secret-volume
+          secret:
+            secretName: history-secrets
